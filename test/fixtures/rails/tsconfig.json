@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "nodenext",
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "contentMappers": [
+    {
+      "package": "json-schema-content-mapper",
+      "extensions": [".schema.yaml"],
+      // Rails-side schemas rarely say additionalProperties: false
+      "options": { "strictObjects": true }
+    }
+  ],
+  "include": ["*.ts"]
+}

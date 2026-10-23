@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "nodenext",
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "contentMappers": [
+    {
+      "package": "json-schema-content-mapper",
+      "extensions": [".schema.yaml", ".schema.yml", ".schema.jsonc"]
+    }
+  ],
+  "include": ["*.ts"]
+}

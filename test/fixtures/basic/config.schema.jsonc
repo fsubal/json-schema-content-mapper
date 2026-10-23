@@ -1,0 +1,19 @@
+{
+  // JSONC: comments and trailing commas are fine
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "point": {
+      "type": "array",
+      "items": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "additionalItems": false,
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+    },
+    "mode": { "const": "fast" },
+  },
+  "required": ["point"],
+}

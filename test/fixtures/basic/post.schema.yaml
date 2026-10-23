@@ -1,0 +1,10 @@
+type: object
+properties:
+  title:
+    type: string
+  author:
+    $ref: ./user.schema.yaml
+  shippedTo:
+    $ref: "./user.schema.yaml#/$defs/Address"
+required: [title, author]
+additionalProperties: false

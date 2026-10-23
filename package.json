@@ -1,0 +1,49 @@
+{
+  "name": "json-schema-content-mapper",
+  "version": "0.1.0",
+  "description": "TypeScript 7.1 content mapper that turns JSON Schema / OpenAPI files (.schema.yaml, .schema.jsonc) into importable types, without code generation or a schema library",
+  "type": "module",
+  "files": [
+    "dist/src"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "typescript": {
+    "contentMapper": {
+      "exec": ["node", "dist/src/server.js"],
+      "compilerOptions": []
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test 'dist/test/**/*.test.js'",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fsubal/json-schema-content-mapper.git"
+  },
+  "keywords": [
+    "typescript",
+    "content-mapper",
+    "json-schema",
+    "openapi",
+    "standard-schema",
+    "json-schema-to-ts"
+  ],
+  "license": "MIT",
+  "author": "fsubal",
+  "peerDependencies": {
+    "typescript": ">=7.1.0-beta"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "json-schema-to-ts": "^3.1.1",
+    "typescript": "7.1.0-beta"
+  }
+}
