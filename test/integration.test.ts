@@ -36,6 +36,20 @@ test("action_controller-open_api operation files type with strictObjects from ts
   assert.equal(status, 0);
 });
 
+test("the README's validator recipes typecheck and validate at run time", () => {
+  const { status, output } = typecheck("recipes");
+  assert.equal(output, "");
+  assert.equal(status, 0);
+  const run = spawnSync(process.execPath, ["run.ts"], { cwd: `${fixtures}/recipes`, encoding: "utf8" });
+  assert.equal(run.stderr, "");
+  assert.deepEqual(JSON.parse(run.stdout), {
+    ajv: ["a", "rejected"],
+    zodFromJsonSchema: [true, false],
+    zodHandwritten: [true, false],
+    standard: [true, true],
+  });
+});
+
 test("parse errors are reported at their place in the schema file", () => {
   const { status, output } = typecheck("broken");
   assert.equal(status, 2);

@@ -1,0 +1,35 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+title: User
+type: object
+properties:
+  id:
+    type: integer
+  name:
+    type: string
+    description: 表示名
+  email:
+    type: [string, "null"]
+  role:
+    enum: [admin, member]
+  tags:
+    type: array
+    items:
+      type: string
+  address:
+    $ref: "#/$defs/Address"
+  friends:
+    type: array
+    items:
+      $ref: "#"
+required: [id, name, role]
+additionalProperties: false
+$defs:
+  Address:
+    type: object
+    properties:
+      city:
+        type: string
+      zip:
+        type: string
+    required: [city]
+    additionalProperties: false

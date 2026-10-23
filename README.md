@@ -13,7 +13,7 @@ type SameUser = FromSchema<Schema>;                           // json-schema-to-
 - Rails など他言語のサーバーが持つスキーマファイルが、そのまま TS の型になります（例: [action_controller-open_api](https://github.com/fsubal/action_controller-open_api) の per-action スキーマ）。
 - `tsc` と エディタ（LSP）の両方で効きます。スキーマを編集すると、それに依存するコードに即座に型エラーが出ます。
 - YAML / JSONC の構文エラーは、元ファイルの行と列で報告されます。
-- zod / valibot / ajv などには依存しません。validate 関数も提供しません（後述）。
+- zod / valibot / ajv などには依存しません。validate 関数も提供しません。手元の validator との組み合わせ方は[後述](#validator-との併用zod--ajv)。
 
 ## 必要なもの
 
@@ -51,7 +51,12 @@ Content Mapper は任意のコードを実行するため、`tsc` では `--runE
 tsc --noEmit --runExternalCode
 ```
 
-VS Code では、ワークスペースの TypeScript を使い、ワークスペースを信頼すると有効になります（`js/ts.contentMappers.enabled` で無効化できます）。
+エディタでは、TypeScript 7 の言語サーバー（`tsc --lsp --stdio`）が Content Mapper を使います。VS Code では、ワークスペースの TypeScript を使い、ワークスペースを信頼すると有効になります（`js/ts.contentMappers.enabled` で無効化できます）。言語サーバーに対して次のことを確認しています（`test/lsp.test.ts`）。
+
+- ホバーに生成された型と JSDoc が出る
+- go-to-definition が YAML / JSONC の該当キーに飛ぶ
+- 保存前のスキーマの編集が、それを import するコードの診断に即座に反映される
+- スキーマファイルの構文エラーが、スキーマファイル自身の診断として出る
 
 ### `.schema.json` は使えません
 
@@ -106,18 +111,131 @@ TypeScript は `.json` と、末尾が `.json` の拡張子（`.schema.json` な
   - アンカー（`#foo`）や `$id` を使う参照、未知の参照先は `unknown` になり、理由が生成コードのコメントに残ります。
 - `format` / `pattern` / `minimum` など、値の範囲だけを絞るキーワードは型に表れません。
 
-## Standard JSON Schema とバリデーション
+## validator との併用（zod / ajv）
 
-このパッケージは validate を提供しません。アプリケーションがすでに使っている validator（ajv や Standard JSON Schema 対応ライブラリなど）にスキーマを渡すときに、型を合わせるための `StandardJSONSchema` 型を用意しています。
+このパッケージは validate を提供しません。マップされたモジュールは型だけなので、validator と組み合わせるときは**値はランタイムで読み込み、型は `import type` で受け取る**形になります。以下のコードは `test/fixtures/recipes/` にそのまま置いてあり、型チェックと実行の両方をテストしています。
+
+### スキーマの値を読み込む
+
+`.schema.yaml` を import すると型だけのモジュールになるので、値はファイルから読みます。
 
 ```ts
-import type { StandardJSONSchema } from "./user.schema.yaml";
+// Node.js
+import { readFileSync } from "node:fs";
+import { parse } from "yaml";
+import type { Schema } from "./user.schema.yaml";
 
-// ~standard.types は User、jsonSchema.input() の戻り値はこのファイルの Schema
-declare const userSchema: StandardJSONSchema;
+export const userSchema = parse(readFileSync(new URL("./user.schema.yaml", import.meta.url), "utf8")) as Schema;
 ```
 
-`StandardJSONSchemaV1` のインターフェースは、仕様の推奨どおり生成モジュールの中に複製しています。構造的には `@standard-schema/spec` と同じなので、このパッケージを依存に足す必要はありません。
+```ts
+// Vite: `?raw` は別の指定子なので、マップされたモジュールではなく Vite の文字列 import になる
+import raw from "./user.schema.yaml?raw";
+import { parse } from "yaml";
+import type { Schema } from "./user.schema.yaml";
+
+export const userSchema = parse(raw) as Schema;
+```
+
+`as Schema` が信頼できるのは、読み込んでいるファイルと型の元になっているファイルが同じだからです。
+
+### ajv
+
+`ajv.compile<User>()` に型を渡すと、`validate()` が `User` への型ガードになります。2020-12 のスキーマには `Ajv2020` を使います（既定の `Ajv` は draft-07）。
+
+```ts
+import { Ajv2020 } from "ajv/dist/2020.js";
+import type { User } from "./user.schema.yaml";
+import { userSchema } from "./load.ts";
+
+const ajv = new Ajv2020();
+export const validateUser = ajv.compile<User>(userSchema);
+
+export function parseUser(data: unknown): User {
+  if (!validateUser(data)) throw new Error(ajv.errorsText(validateUser.errors));
+  return data; // User に絞り込まれる
+}
+```
+
+### zod（`z.fromJSONSchema`）
+
+zod 4 の `z.fromJSONSchema()` でスキーマから zod スキーマを作れます。戻り値は `ZodType<unknown>` なので、マッパーの型を付けます。
+
+```ts
+import { z } from "zod";
+import type { User } from "./user.schema.yaml";
+import { userSchema } from "./load.ts";
+
+// zod の JSONSchema 型は配列が mutable なので、readonly な Schema は unknown を経由して渡す
+export const UserZod = z.fromJSONSchema(userSchema as unknown as z.core.JSONSchema.JSONSchema) as z.ZodType<User>;
+```
+
+### zod（手書きのスキーマを、サーバー側のスキーマと突き合わせる）
+
+ランタイムでファイルを読み込まない方法です。zod スキーマは手で書き、推論される型がサーバー側のスキーマと一致することを型レベルで検査します。Rails 側のスキーマが変わると、ここがコンパイルエラーになります（`Expected 1 arguments, but got 0.`）。
+
+```ts
+import { z } from "zod";
+import type { User, Address } from "./user.schema.yaml";
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+function assertEqual<A, B>(..._: Equal<A, B> extends true ? [] : [never]): void {}
+
+const AddressZod = z.object({ city: z.string(), zip: z.string().optional() });
+
+export const UserZod = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  email: z.string().nullable().optional(),
+  role: z.enum(["admin", "member"]),
+  tags: z.array(z.string()).optional(),
+  address: AddressZod.optional(),
+  get friends() {
+    return z.array(UserZod).optional();
+  },
+});
+
+assertEqual<z.infer<typeof AddressZod>, Address>();
+assertEqual<z.infer<typeof UserZod>, User>();
+```
+
+`satisfies z.ZodType<User>` は片方向の検査なので、スキーマ側で増えたプロパティを見逃します。両方向で比べるには上のように `Equal` を使います。
+
+### Standard Schema / Standard JSON Schema にする
+
+`StandardJSONSchema` 型は [Standard JSON Schema](https://standardschema.dev/json-schema)（`StandardJSONSchemaV1`）の形をしています。`~standard.types` は `User`、`jsonSchema.input()` / `output()` の戻り値はこのファイルの `Schema` です。手元の validator と合わせれば、Standard Schema（`validate` を持つ）としても使えるオブジェクトを作れます。
+
+```ts
+import type { StandardJSONSchema, User } from "./user.schema.yaml";
+import { validateUser } from "./ajv.ts";
+import { userSchema } from "./load.ts";
+
+type Issue = { readonly message: string; readonly path?: readonly PropertyKey[] };
+type StandardUser = StandardJSONSchema & {
+  readonly "~standard": {
+    readonly validate: (value: unknown) => { readonly value: User; readonly issues?: undefined } | { readonly issues: readonly Issue[] };
+  };
+};
+
+export const UserStandard: StandardUser = {
+  "~standard": {
+    version: 1,
+    vendor: "my-app",
+    jsonSchema: { input: () => userSchema, output: () => userSchema },
+    validate(value) {
+      if (validateUser(value)) return { value };
+      return {
+        issues: (validateUser.errors ?? []).map((error) => ({
+          message: error.message ?? "invalid",
+          path: error.instancePath.split("/").slice(1),
+        })),
+      };
+    },
+  },
+};
+```
+
+`StandardJSONSchemaV1` のインターフェースは、仕様の推奨どおり生成モジュールの中に複製しています。構造的には `@standard-schema/spec` と同じなので、`@standard-schema/spec` を依存に足す必要はありません。
 
 ## オプション
 
@@ -131,7 +249,7 @@ declare const userSchema: StandardJSONSchema;
 
 ```sh
 npm install
-npm test   # build + unit / server プロトコル / tsc 統合テスト
+npm test   # build + unit / server プロトコル / tsc 統合テスト / 言語サーバー
 ```
 
 `test/fixtures/*` は `tsc --runExternalCode` で型チェックする実プロジェクトです。`assertions.ts` などの型アサーションで生成型を検証しています。
