@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { after, before, test } from "node:test";
+import { fixtures, linkMapperPackage, tsc } from "./fixtures.js";
 
 // The editor's side: the same language server VS Code runs (`tsc --lsp --stdio`),
 // with content mappers allowed as a trusted workspace allows them
 
-const root = fileURLToPath(new URL("../..", import.meta.url));
-const fixtures = `${root}test/fixtures`;
 const project = `${fixtures}/basic`;
-const tsc = `${root}node_modules/typescript/bin/tsc`;
 const uri = (file: string) => pathToFileURL(`${project}/${file}`).href;
 
 class LspClient {
@@ -82,11 +80,7 @@ class LspClient {
 let client: LspClient;
 
 before(async () => {
-  const link = `${fixtures}/node_modules/json-schema-content-mapper`;
-  if (!existsSync(link)) {
-    mkdirSync(`${fixtures}/node_modules`, { recursive: true });
-    symlinkSync("../..", link);
-  }
+  linkMapperPackage();
   client = new LspClient();
   await client.request("initialize", {
     processId: process.pid,

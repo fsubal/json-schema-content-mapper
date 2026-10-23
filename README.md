@@ -1,5 +1,7 @@
 # json-schema-content-mapper
 
+[![CI](https://github.com/fsubal/json-schema-content-mapper/actions/workflows/ci.yml/badge.svg)](https://github.com/fsubal/json-schema-content-mapper/actions/workflows/ci.yml)
+
 JSON Schema / OpenAPI のファイル（`.schema.yaml` / `.schema.yml` / `.schema.jsonc`）を、**コード生成なし・スキーマライブラリなし**で TypeScript の型として import できる [TypeScript 7.1 Content Mapper](https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/) です。
 
 ```ts

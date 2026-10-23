@@ -1,21 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, symlinkSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { before, test } from "node:test";
+import { fixtures, linkMapperPackage, tsc } from "./fixtures.js";
 
-const root = fileURLToPath(new URL("../..", import.meta.url));
-const fixtures = `${root}test/fixtures`;
-const tsc = `${root}node_modules/typescript/bin/tsc`;
-
-before(() => {
-  // Fixture projects find the mapper package as `json-schema-content-mapper`, i.e. this repository
-  const link = `${fixtures}/node_modules/json-schema-content-mapper`;
-  if (!existsSync(link)) {
-    mkdirSync(`${fixtures}/node_modules`, { recursive: true });
-    symlinkSync("../..", link);
-  }
-});
+before(linkMapperPackage);
 
 function typecheck(project: string) {
   const result = spawnSync(process.execPath, [tsc, "-p", `${fixtures}/${project}`, "--runExternalCode", "--pretty", "false"], {
